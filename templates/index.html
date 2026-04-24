@@ -9,7 +9,7 @@
   <body>
     <main class="container">
       <h1>Поиск Telegram-каналов по вашим условиям</h1>
-      <p class="hint">Источник: Telegram API (Telethon). Находит каналы и выгружает @username в CSV.</p>
+      <p class="hint">Данные API сохраняются локально в файле <code>tg_defaults.json</code>, чтобы не вводить каждый раз.</p>
 
       <form id="parser-form" class="panel">
         <div class="row">
@@ -26,9 +26,29 @@
             <input type="text" name="phone" placeholder="+79990000000" required />
           </label>
           <label>Поисковые запросы (через запятую)
-            <input type="text" name="queries" placeholder="новости крипто, ai, маркетинг" required />
+            <input type="text" name="queries" placeholder="новости, политика, спорт" required />
           </label>
         </div>
+
+        <details>
+          <summary>Прокси SOCKS5 (если Telegram не подключается)</summary>
+          <div class="row">
+            <label>Proxy host
+              <input type="text" name="proxy_host" placeholder="127.0.0.1" />
+            </label>
+            <label>Proxy port
+              <input type="number" name="proxy_port" value="1080" />
+            </label>
+          </div>
+          <div class="row">
+            <label>Proxy username
+              <input type="text" name="proxy_username" />
+            </label>
+            <label>Proxy password
+              <input type="password" name="proxy_password" />
+            </label>
+          </div>
+        </details>
 
         <div class="row">
           <label>Категория
@@ -43,6 +63,26 @@
           </label>
           <label>Минимум подписчиков
             <input type="number" name="min_subscribers" value="500" min="0" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>Языки каналов (можно несколько)
+            <select name="languages" multiple size="4">
+              <option value="ru">ru</option>
+              <option value="en">en</option>
+              <option value="other">other</option>
+            </select>
+          </label>
+          <label>Страны каналов (можно несколько)
+            <select name="countries" multiple size="6">
+              <option value="russia">russia</option>
+              <option value="ukraine">ukraine</option>
+              <option value="kazakhstan">kazakhstan</option>
+              <option value="belarus">belarus</option>
+              <option value="usa">usa</option>
+              <option value="unknown">unknown</option>
+            </select>
           </label>
         </div>
 
@@ -75,6 +115,7 @@
         </div>
 
         <div class="actions">
+          <button type="button" id="save-settings-btn">Сохранить API/телефон</button>
           <button type="submit">Запустить парсинг</button>
           <button type="button" id="export-btn" disabled>Выгрузить CSV</button>
         </div>
@@ -93,6 +134,7 @@
       const statusEl = document.getElementById('status');
       const resultsEl = document.getElementById('results');
       const exportBtn = document.getElementById('export-btn');
+      const saveBtn = document.getElementById('save-settings-btn');
       let lastItems = [];
 
       const setStatus = (text, ok = true) => {
@@ -100,10 +142,43 @@
         statusEl.className = ok ? 'status ok' : 'status error';
       };
 
+      async function loadDefaults() {
+        const resp = await fetch('/api/settings');
+        const data = await resp.json();
+        if (!data.ok) return;
+        const s = data.settings || {};
+        for (const key of ['api_id', 'api_hash', 'phone', 'proxy_host', 'proxy_port', 'proxy_username', 'proxy_password']) {
+          if (form.elements[key]) form.elements[key].value = s[key] || '';
+        }
+      }
+
+      saveBtn.addEventListener('click', async () => {
+        const payload = {
+          api_id: form.elements.api_id.value,
+          api_hash: form.elements.api_hash.value,
+          phone: form.elements.phone.value,
+          proxy_host: form.elements.proxy_host.value,
+          proxy_port: form.elements.proxy_port.value,
+          proxy_username: form.elements.proxy_username.value,
+          proxy_password: form.elements.proxy_password.value,
+        };
+        const resp = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (resp.ok && data.ok) {
+          setStatus('Настройки сохранены. Теперь API ID/HASH/телефон подставляются автоматически.');
+        } else {
+          setStatus('Не удалось сохранить настройки', false);
+        }
+      });
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(form);
-        setStatus('Идет парсинг... При первом запуске код подтверждения нужно ввести в консоль приложения.');
+        setStatus('Идет парсинг... Если видите TimeoutError в консоли, включите SOCKS5 прокси и повторите.');
 
         const resp = await fetch('/api/parse', { method: 'POST', body: fd });
         const data = await resp.json();
@@ -128,7 +203,7 @@
             <article class="item">
               <a href="https://t.me/${item.username.replace('@', '')}" target="_blank">${item.username}</a>
               <div class="meta">${item.title} · подписчики: ${item.subscribers} · ER: ${item.engagement_rate}% · категория: ${item.category}</div>
-              <div class="meta">комментарии: ${item.comments_enabled ? 'открыты' : 'закрыты'} · постов за период: ${item.recent_posts} · средние просмотры: ${item.avg_views}</div>
+              <div class="meta">язык: ${item.language} · страна: ${item.country} · комментарии: ${item.comments_enabled ? 'открыты' : 'закрыты'}</div>
             </article>`
           )
           .join('');
@@ -150,6 +225,8 @@
         a.click();
         URL.revokeObjectURL(url);
       });
+
+      loadDefaults();
     </script>
   </body>
 </html>

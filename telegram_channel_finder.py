@@ -13,6 +13,8 @@ class ChannelInfo:
     subscribers: int
     comments_enabled: bool
     category: str
+    language: str
+    country: str
     recent_posts: int
     avg_views: float
     engagement_rate: float
@@ -34,15 +36,50 @@ def classify_category(text: str, category_rules: dict[str, list[str]]) -> str:
     return "other"
 
 
+def detect_language(text: str) -> str:
+    text_l = text.lower()
+    ru_markers = [" и ", "что", "новости", "канал", "подпис"]
+    en_markers = [" the ", "news", "channel", "official", "daily"]
+
+    cyr = sum(1 for ch in text_l if "а" <= ch <= "я" or ch == "ё")
+    lat = sum(1 for ch in text_l if "a" <= ch <= "z")
+
+    if any(m in text_l for m in ru_markers) or cyr > lat * 0.8:
+        return "ru"
+    if any(m in text_l for m in en_markers) or lat > cyr:
+        return "en"
+    return "other"
+
+
+def detect_country(text: str) -> str:
+    text_l = text.lower()
+    country_rules = {
+        "russia": ["россия", "russia", "москва", "спб"],
+        "ukraine": ["украина", "ukraine", "киев", "kyiv"],
+        "kazakhstan": ["казахстан", "kazakhstan", "алматы", "астана"],
+        "belarus": ["беларус", "belarus", "минск"],
+        "usa": ["usa", "united states", "америк", "new york", "washington"],
+    }
+    for country, words in country_rules.items():
+        if any(w in text_l for w in words):
+            return country
+    return "unknown"
+
+
 def filter_channels(
     channels: Iterable[ChannelInfo],
     required_category: str = "any",
+    required_languages: Optional[list[str]] = None,
+    required_countries: Optional[list[str]] = None,
     min_subscribers: int = 500,
     require_comments_open: bool = True,
     min_engagement_rate: float = 2.0,
     min_recent_posts: int = 3,
     active_within_days: int = 14,
 ) -> List[ChannelInfo]:
+    required_languages = [x.lower() for x in (required_languages or [])]
+    required_countries = [x.lower() for x in (required_countries or [])]
+
     now = datetime.now(timezone.utc)
     result: List[ChannelInfo] = []
 
@@ -52,6 +89,10 @@ def filter_channels(
         if require_comments_open and not ch.comments_enabled:
             continue
         if required_category != "any" and ch.category != required_category:
+            continue
+        if required_languages and ch.language.lower() not in required_languages:
+            continue
+        if required_countries and ch.country.lower() not in required_countries:
             continue
         if ch.engagement_rate < min_engagement_rate:
             continue
@@ -73,6 +114,7 @@ def discover_channels_via_telegram(
     search_queries: list[str],
     max_channels: int = 100,
     lookback_days: int = 30,
+    proxy: Optional[dict] = None,
 ) -> List[ChannelInfo]:
     from telethon import TelegramClient
     from telethon.errors import SessionPasswordNeededError
@@ -98,7 +140,29 @@ def discover_channels_via_telegram(
         asyncio.set_event_loop(loop)
         created_loop = True
 
-    with TelegramClient("channel_finder_session", api_id, api_hash, loop=loop) as client:
+    client_proxy = None
+    if proxy and proxy.get("host"):
+        import socks
+
+        client_proxy = (
+            socks.SOCKS5,
+            proxy["host"],
+            int(proxy.get("port", 1080)),
+            True,
+            proxy.get("username"),
+            proxy.get("password"),
+        )
+
+    with TelegramClient(
+        "channel_finder_session",
+        api_id,
+        api_hash,
+        loop=loop,
+        proxy=client_proxy,
+        connection_retries=1,
+        request_retries=1,
+        timeout=20,
+    ) as client:
         client.connect()
         if not client.is_user_authorized():
             client.send_code_request(phone)
@@ -143,8 +207,10 @@ def discover_channels_via_telegram(
                 avg_views = float(sum(views) / len(views)) if views else 0.0
                 engagement_rate = (avg_views / subscribers * 100) if subscribers > 0 else 0.0
 
-                text_for_category = f"{chat.title or ''} {getattr(full_chat, 'about', '')}"
-                category = classify_category(text_for_category, category_rules)
+                text_for_meta = f"{chat.title or ''} {getattr(full_chat, 'about', '')}"
+                category = classify_category(text_for_meta, category_rules)
+                language = detect_language(text_for_meta)
+                country = detect_country(text_for_meta)
 
                 unique[uname] = ChannelInfo(
                     title=chat.title or uname,
@@ -152,6 +218,8 @@ def discover_channels_via_telegram(
                     subscribers=subscribers,
                     comments_enabled=comments_enabled,
                     category=category,
+                    language=language,
+                    country=country,
                     recent_posts=recent_posts,
                     avg_views=round(avg_views, 2),
                     engagement_rate=round(engagement_rate, 2),
