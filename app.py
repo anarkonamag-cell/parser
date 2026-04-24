@@ -8,7 +8,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request
 
-from telegram_channel_finder import check_socks5_proxy, discover_channels_via_telegram, filter_channels
+from telegram_channel_finder import check_mtproto_proxy, discover_channels_via_telegram, filter_channels
 
 app = Flask(__name__)
 PARSE_LOCK = threading.Lock()
@@ -17,10 +17,10 @@ DEFAULT_SETTINGS = {
     "api_id": "35779099",
     "api_hash": "4b4d4ecbe7623c805baf43ce6aef2448",
     "phone": "+79198037500",
-    "proxy_host": "",
-    "proxy_port": "1080",
-    "proxy_username": "",
-    "proxy_password": "",
+    "mtproto_host": "138.249.28.36",
+    "mtproto_port": "443",
+    "mtproto_secret": "ee534540bab647a0ee1f9a9452d43a729a79612e7275",
+    "mtproto_dc_id": "8049",
 }
 
 
@@ -59,27 +59,17 @@ def set_settings():
     return jsonify({"ok": True})
 
 
-
-
 @app.post("/api/check_proxy")
 def check_proxy():
     payload = request.get_json(force=True, silent=True) or {}
-    host = str(payload.get("proxy_host", "")).strip()
-    port = str(payload.get("proxy_port", "1080")).strip()
-    username = str(payload.get("proxy_username", "")).strip()
-    password = str(payload.get("proxy_password", "")).strip()
+    host = str(payload.get("mtproto_host", "")).strip()
+    port = str(payload.get("mtproto_port", "443")).strip()
+    secret = str(payload.get("mtproto_secret", "")).strip()
 
-    if not host:
-        return jsonify({"ok": False, "error": "Укажите proxy host."}), 400
+    if not host or not secret:
+        return jsonify({"ok": False, "error": "Укажите MTProto host и secret."}), 400
 
-    ok, message = check_socks5_proxy(
-        {
-            "host": host,
-            "port": int(port or "1080"),
-            "username": username or None,
-            "password": password or None,
-        }
-    )
+    ok, message = check_mtproto_proxy(host=host, port=int(port or "443"), secret=secret)
     status = 200 if ok else 400
     return jsonify({"ok": ok, "message": message}), status
 
@@ -100,10 +90,10 @@ def parse_channel_list():
         "api_id": api_id_raw,
         "api_hash": api_hash,
         "phone": phone,
-        "proxy_host": request.form.get("proxy_host", "").strip(),
-        "proxy_port": request.form.get("proxy_port", "1080").strip(),
-        "proxy_username": request.form.get("proxy_username", "").strip(),
-        "proxy_password": request.form.get("proxy_password", "").strip(),
+        "mtproto_host": request.form.get("mtproto_host", "").strip(),
+        "mtproto_port": request.form.get("mtproto_port", "443").strip(),
+        "mtproto_secret": request.form.get("mtproto_secret", "").strip(),
+        "mtproto_dc_id": request.form.get("mtproto_dc_id", "").strip(),
     }
     save_settings(current_settings)
 
@@ -122,12 +112,13 @@ def parse_channel_list():
     search_queries = [q.strip() for q in queries_raw.split(",") if q.strip()]
 
     proxy = None
-    if current_settings["proxy_host"]:
+    if current_settings["mtproto_host"] and current_settings["mtproto_secret"]:
         proxy = {
-            "host": current_settings["proxy_host"],
-            "port": int(current_settings["proxy_port"] or "1080"),
-            "username": current_settings["proxy_username"] or None,
-            "password": current_settings["proxy_password"] or None,
+            "mode": "mtproto",
+            "host": current_settings["mtproto_host"],
+            "port": int(current_settings["mtproto_port"] or "443"),
+            "secret": current_settings["mtproto_secret"],
+            "dc_id": current_settings["mtproto_dc_id"] or None,
         }
 
     if not PARSE_LOCK.acquire(blocking=False):
@@ -158,7 +149,7 @@ def parse_channel_list():
         return jsonify(
             {
                 "ok": False,
-                "error": "Таймаут подключения к Telegram. Попробуйте прокси (SOCKS5), проверьте сеть и повторите.",
+                "error": "Таймаут подключения к Telegram через MTProto. Проверьте host/port/secret и повторите.",
             }
         ), 400
     except Exception as exc:  # pragma: no cover

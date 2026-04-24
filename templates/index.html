@@ -9,7 +9,7 @@
   <body>
     <main class="container">
       <h1>Поиск Telegram-каналов по вашим условиям</h1>
-      <p class="hint">Данные API сохраняются локально в файле <code>tg_defaults.json</code>, чтобы не вводить каждый раз.</p>
+      <p class="hint">API и MTProto сохраняются в <code>tg_defaults.json</code>.</p>
 
       <form id="parser-form" class="panel">
         <div class="row">
@@ -30,22 +30,22 @@
           </label>
         </div>
 
-        <details>
-          <summary>Прокси SOCKS5 (если Telegram не подключается)</summary>
+        <details open>
+          <summary>MTProto прокси</summary>
           <div class="row">
-            <label>Proxy host
-              <input type="text" name="proxy_host" placeholder="127.0.0.1" />
+            <label>MTProto host
+              <input type="text" name="mtproto_host" placeholder="138.249.28.36" />
             </label>
-            <label>Proxy port
-              <input type="number" name="proxy_port" value="1080" />
+            <label>MTProto port
+              <input type="number" name="mtproto_port" value="443" />
             </label>
           </div>
           <div class="row">
-            <label>Proxy username
-              <input type="text" name="proxy_username" />
+            <label>MTProto secret
+              <input type="text" name="mtproto_secret" />
             </label>
-            <label>Proxy password
-              <input type="password" name="proxy_password" />
+            <label>MTProto DC/ID (опционально)
+              <input type="text" name="mtproto_dc_id" placeholder="8049" />
             </label>
           </div>
         </details>
@@ -75,7 +75,8 @@
             </select>
           </label>
           <label>Страны каналов (можно несколько)
-            <select name="countries" multiple size="6">
+            <select name="countries" multiple size="7">
+              <option value="germany">germany</option>
               <option value="russia">russia</option>
               <option value="ukraine">ukraine</option>
               <option value="kazakhstan">kazakhstan</option>
@@ -115,8 +116,8 @@
         </div>
 
         <div class="actions">
-          <button type="button" id="save-settings-btn">Сохранить API/телефон</button>
-          <button type="button" id="check-proxy-btn">Проверить прокси</button>
+          <button type="button" id="save-settings-btn">Сохранить настройки</button>
+          <button type="button" id="check-proxy-btn">Проверить MTProto</button>
           <button type="submit">Запустить парсинг</button>
           <button type="button" id="export-btn" disabled>Выгрузить CSV</button>
         </div>
@@ -149,7 +150,7 @@
         const data = await resp.json();
         if (!data.ok) return;
         const s = data.settings || {};
-        for (const key of ['api_id', 'api_hash', 'phone', 'proxy_host', 'proxy_port', 'proxy_username', 'proxy_password']) {
+        for (const key of ['api_id', 'api_hash', 'phone', 'mtproto_host', 'mtproto_port', 'mtproto_secret', 'mtproto_dc_id']) {
           if (form.elements[key]) form.elements[key].value = s[key] || '';
         }
       }
@@ -159,10 +160,10 @@
           api_id: form.elements.api_id.value,
           api_hash: form.elements.api_hash.value,
           phone: form.elements.phone.value,
-          proxy_host: form.elements.proxy_host.value,
-          proxy_port: form.elements.proxy_port.value,
-          proxy_username: form.elements.proxy_username.value,
-          proxy_password: form.elements.proxy_password.value,
+          mtproto_host: form.elements.mtproto_host.value,
+          mtproto_port: form.elements.mtproto_port.value,
+          mtproto_secret: form.elements.mtproto_secret.value,
+          mtproto_dc_id: form.elements.mtproto_dc_id.value,
         };
         const resp = await fetch('/api/settings', {
           method: 'POST',
@@ -171,19 +172,17 @@
         });
         const data = await resp.json();
         if (resp.ok && data.ok) {
-          setStatus('Настройки сохранены. Теперь API ID/HASH/телефон подставляются автоматически.');
+          setStatus('Настройки сохранены.');
         } else {
           setStatus('Не удалось сохранить настройки', false);
         }
       });
 
-
       checkProxyBtn.addEventListener('click', async () => {
         const payload = {
-          proxy_host: form.elements.proxy_host.value,
-          proxy_port: form.elements.proxy_port.value,
-          proxy_username: form.elements.proxy_username.value,
-          proxy_password: form.elements.proxy_password.value,
+          mtproto_host: form.elements.mtproto_host.value,
+          mtproto_port: form.elements.mtproto_port.value,
+          mtproto_secret: form.elements.mtproto_secret.value,
         };
         const resp = await fetch('/api/check_proxy', {
           method: 'POST',
@@ -192,16 +191,16 @@
         });
         const data = await resp.json();
         if (!resp.ok || !data.ok) {
-          setStatus(data.error || data.message || 'Прокси не прошел проверку', false);
+          setStatus(data.error || data.message || 'MTProto не прошел проверку', false);
           return;
         }
-        setStatus(data.message || 'Прокси успешно проверен.');
+        setStatus(data.message || 'MTProto endpoint доступен.');
       });
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(form);
-        setStatus('Идет парсинг... Если видите TimeoutError в консоли, включите SOCKS5 прокси и повторите.');
+        setStatus('Идет парсинг...');
 
         const resp = await fetch('/api/parse', { method: 'POST', body: fd });
         const data = await resp.json();

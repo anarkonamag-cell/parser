@@ -55,6 +55,7 @@ def detect_language(text: str) -> str:
 def detect_country(text: str) -> str:
     text_l = text.lower()
     country_rules = {
+        "germany": ["germany", "deutsch", "berlin", "munich", "hamburg", "германи"],
         "russia": ["россия", "russia", "москва", "спб"],
         "ukraine": ["украина", "ukraine", "киев", "kyiv"],
         "kazakhstan": ["казахстан", "kazakhstan", "алматы", "астана"],
@@ -117,7 +118,7 @@ def discover_channels_via_telegram(
     lookback_days: int = 30,
     proxy: Optional[dict] = None,
 ) -> List[ChannelInfo]:
-    from telethon import TelegramClient
+    from telethon import TelegramClient, connection
     from telethon.errors import SessionPasswordNeededError
     from telethon.tl.functions.contacts import SearchRequest
     from telethon.tl.functions.channels import GetFullChannelRequest
@@ -141,29 +142,18 @@ def discover_channels_via_telegram(
         asyncio.set_event_loop(loop)
         created_loop = True
 
-    client_proxy = None
-    if proxy and proxy.get("host"):
-        import socks
+    client_kwargs = {
+        "loop": loop,
+        "connection_retries": 1,
+        "request_retries": 1,
+        "timeout": 20,
+    }
 
-        client_proxy = (
-            socks.SOCKS5,
-            proxy["host"],
-            int(proxy.get("port", 1080)),
-            True,
-            proxy.get("username"),
-            proxy.get("password"),
-        )
+    if proxy and proxy.get("mode") == "mtproto" and proxy.get("host") and proxy.get("secret"):
+        client_kwargs["connection"] = connection.ConnectionTcpMTProxyRandomizedIntermediate
+        client_kwargs["proxy"] = (proxy["host"], int(proxy.get("port", 443)), proxy["secret"])
 
-    with TelegramClient(
-        "channel_finder_session",
-        api_id,
-        api_hash,
-        loop=loop,
-        proxy=client_proxy,
-        connection_retries=1,
-        request_retries=1,
-        timeout=20,
-    ) as client:
+    with TelegramClient("channel_finder_session", api_id, api_hash, **client_kwargs) as client:
         client.connect()
         if not client.is_user_authorized():
             client.send_code_request(phone)
@@ -232,26 +222,16 @@ def discover_channels_via_telegram(
     return list(unique.values())
 
 
-
-def check_socks5_proxy(proxy: dict, timeout: int = 8) -> tuple[bool, str]:
-    """Quick connectivity check to Telegram DC via SOCKS5 proxy."""
+def check_mtproto_proxy(host: str, port: int, secret: str, timeout: int = 8) -> tuple[bool, str]:
+    """Quick connectivity check for MTProto endpoint reachability."""
     try:
-        import socks
+        if not secret or len(secret) < 16:
+            return False, "Слишком короткий secret MTProto."
 
-        sock = socks.socksocket()
-        sock.set_proxy(
-            socks.SOCKS5,
-            proxy.get("host"),
-            int(proxy.get("port", 1080)),
-            True,
-            proxy.get("username"),
-            proxy.get("password"),
-        )
-        sock.settimeout(timeout)
-        sock.connect(("149.154.167.51", 443))
+        sock = socket.create_connection((host, int(port)), timeout=timeout)
         sock.close()
-        return True, "Прокси доступен и соединение до Telegram DC успешно."
+        return True, "MTProto endpoint отвечает (TCP доступ есть)."
     except socket.timeout:
-        return False, "Таймаут прокси при попытке подключения к Telegram."
+        return False, "Таймаут при подключении к MTProto endpoint."
     except Exception as exc:
-        return False, f"Прокси недоступен: {exc}"
+        return False, f"MTProto endpoint недоступен: {exc}"
