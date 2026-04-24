@@ -75,14 +75,8 @@
             </select>
           </label>
           <label>Страны каналов (можно несколько)
-            <select name="countries" multiple size="7">
-              <option value="germany">germany</option>
-              <option value="russia">russia</option>
-              <option value="ukraine">ukraine</option>
-              <option value="kazakhstan">kazakhstan</option>
-              <option value="belarus">belarus</option>
-              <option value="usa">usa</option>
-              <option value="unknown">unknown</option>
+            <select name="countries" multiple size="14">
+              <option value="germany">germany</option><option value="france">france</option><option value="italy">italy</option><option value="spain">spain</option><option value="portugal">portugal</option><option value="netherlands">netherlands</option><option value="belgium">belgium</option><option value="switzerland">switzerland</option><option value="austria">austria</option><option value="poland">poland</option><option value="czechia">czechia</option><option value="slovakia">slovakia</option><option value="hungary">hungary</option><option value="romania">romania</option><option value="bulgaria">bulgaria</option><option value="greece">greece</option><option value="croatia">croatia</option><option value="serbia">serbia</option><option value="slovenia">slovenia</option><option value="bosnia">bosnia</option><option value="montenegro">montenegro</option><option value="albania">albania</option><option value="north_macedonia">north_macedonia</option><option value="norway">norway</option><option value="sweden">sweden</option><option value="finland">finland</option><option value="denmark">denmark</option><option value="ireland">ireland</option><option value="iceland">iceland</option><option value="estonia">estonia</option><option value="latvia">latvia</option><option value="lithuania">lithuania</option><option value="luxembourg">luxembourg</option><option value="malta">malta</option><option value="cyprus">cyprus</option><option value="ukraine">ukraine</option><option value="belarus">belarus</option><option value="russia">russia</option><option value="kazakhstan">kazakhstan</option><option value="usa">usa</option><option value="unknown">unknown</option>
             </select>
           </label>
         </div>
@@ -163,6 +157,8 @@
           mtproto_host: form.elements.mtproto_host.value,
           mtproto_port: form.elements.mtproto_port.value,
           mtproto_secret: form.elements.mtproto_secret.value,
+          api_id: form.elements.api_id.value,
+          api_hash: form.elements.api_hash.value,
           mtproto_dc_id: form.elements.mtproto_dc_id.value,
         };
         const resp = await fetch('/api/settings', {
@@ -183,6 +179,8 @@
           mtproto_host: form.elements.mtproto_host.value,
           mtproto_port: form.elements.mtproto_port.value,
           mtproto_secret: form.elements.mtproto_secret.value,
+          api_id: form.elements.api_id.value,
+          api_hash: form.elements.api_hash.value,
         };
         const resp = await fetch('/api/check_proxy', {
           method: 'POST',

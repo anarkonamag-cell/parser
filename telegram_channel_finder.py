@@ -29,6 +29,10 @@ def _normalize_username(username: str) -> str:
     return username.strip().lower()
 
 
+def _normalize_secret(secret: str) -> str:
+    return "".join(secret.strip().split()).lower()
+
+
 def classify_category(text: str, category_rules: dict[str, list[str]]) -> str:
     text_l = text.lower()
     for category, keywords in category_rules.items():
@@ -55,12 +59,46 @@ def detect_language(text: str) -> str:
 def detect_country(text: str) -> str:
     text_l = text.lower()
     country_rules = {
-        "germany": ["germany", "deutsch", "berlin", "munich", "hamburg", "германи"],
-        "russia": ["россия", "russia", "москва", "спб"],
+        "germany": ["germany", "deutsch", "berlin", "герман"],
+        "france": ["france", "paris", "франц"],
+        "italy": ["italy", "roma", "итал"],
+        "spain": ["spain", "madrid", "испан"],
+        "portugal": ["portugal", "lisbon", "португал"],
+        "netherlands": ["netherlands", "holland", "amsterdam", "нидерланд"],
+        "belgium": ["belgium", "brussels", "бельг"],
+        "switzerland": ["switzerland", "zurich", "bern", "швейцар"],
+        "austria": ["austria", "vienna", "австри"],
+        "poland": ["poland", "warsaw", "польш"],
+        "czechia": ["czech", "prague", "чех"],
+        "slovakia": ["slovakia", "bratislava", "словаки"],
+        "hungary": ["hungary", "budapest", "венгр"],
+        "romania": ["romania", "bucharest", "румын"],
+        "bulgaria": ["bulgaria", "sofia", "болгар"],
+        "greece": ["greece", "athens", "греци"],
+        "croatia": ["croatia", "zagreb", "хорват"],
+        "serbia": ["serbia", "belgrade", "серби"],
+        "slovenia": ["slovenia", "ljubljana", "словени"],
+        "bosnia": ["bosnia", "sarajevo", "босн"],
+        "montenegro": ["montenegro", "podgorica", "черногор"],
+        "albania": ["albania", "tirana", "албани"],
+        "north_macedonia": ["macedonia", "skopje", "македон"],
+        "norway": ["norway", "oslo", "норвег"],
+        "sweden": ["sweden", "stockholm", "швец"],
+        "finland": ["finland", "helsinki", "финлян"],
+        "denmark": ["denmark", "copenhagen", "дан"],
+        "ireland": ["ireland", "dublin", "ирланд"],
+        "iceland": ["iceland", "reykjavik", "ислан"],
+        "estonia": ["estonia", "tallinn", "эстон"],
+        "latvia": ["latvia", "riga", "латви"],
+        "lithuania": ["lithuania", "vilnius", "литв"],
+        "luxembourg": ["luxembourg", "люксем"],
+        "malta": ["malta", "мальт"],
+        "cyprus": ["cyprus", "кипр"],
         "ukraine": ["украина", "ukraine", "киев", "kyiv"],
-        "kazakhstan": ["казахстан", "kazakhstan", "алматы", "астана"],
         "belarus": ["беларус", "belarus", "минск"],
-        "usa": ["usa", "united states", "америк", "new york", "washington"],
+        "russia": ["россия", "russia", "москва", "спб"],
+        "kazakhstan": ["казахстан", "kazakhstan", "алматы", "астана"],
+        "usa": ["usa", "united states", "америк"],
     }
     for country, words in country_rules.items():
         if any(w in text_l for w in words):
@@ -109,6 +147,42 @@ def filter_channels(
     return sorted(result, key=lambda c: (c.engagement_rate, c.subscribers), reverse=True)
 
 
+def _telethon_client_for_mtproto(session_name: str, api_id: int, api_hash: str, host: str, port: int, secret: str, loop):
+    from telethon import TelegramClient, connection
+
+    conn_candidates = [
+        connection.ConnectionTcpMTProxyRandomizedIntermediate,
+        connection.ConnectionTcpMTProxyIntermediate,
+        connection.ConnectionTcpMTProxyAbridged,
+    ]
+
+    last_exc: Exception | None = None
+    for conn_cls in conn_candidates:
+        client = TelegramClient(
+            session_name,
+            api_id,
+            api_hash,
+            loop=loop,
+            connection=conn_cls,
+            proxy=(host, port, secret),
+            connection_retries=1,
+            request_retries=1,
+            timeout=20,
+        )
+        try:
+            client.connect()
+            if client.is_connected():
+                return client
+            client.disconnect()
+        except Exception as exc:
+            last_exc = exc
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+    raise RuntimeError(f"MTProto connect failed: {last_exc}")
+
+
 def discover_channels_via_telegram(
     api_id: int,
     api_hash: str,
@@ -118,7 +192,7 @@ def discover_channels_via_telegram(
     lookback_days: int = 30,
     proxy: Optional[dict] = None,
 ) -> List[ChannelInfo]:
-    from telethon import TelegramClient, connection
+    from telethon import TelegramClient
     from telethon.errors import SessionPasswordNeededError
     from telethon.tl.functions.contacts import SearchRequest
     from telethon.tl.functions.channels import GetFullChannelRequest
@@ -142,19 +216,22 @@ def discover_channels_via_telegram(
         asyncio.set_event_loop(loop)
         created_loop = True
 
-    client_kwargs = {
-        "loop": loop,
-        "connection_retries": 1,
-        "request_retries": 1,
-        "timeout": 20,
-    }
+    client = None
+    try:
+        if proxy and proxy.get("mode") == "mtproto" and proxy.get("host") and proxy.get("secret"):
+            client = _telethon_client_for_mtproto(
+                session_name="channel_finder_session",
+                api_id=api_id,
+                api_hash=api_hash,
+                host=proxy["host"],
+                port=int(proxy.get("port", 443)),
+                secret=_normalize_secret(proxy["secret"]),
+                loop=loop,
+            )
+        else:
+            client = TelegramClient("channel_finder_session", api_id, api_hash, loop=loop)
+            client.connect()
 
-    if proxy and proxy.get("mode") == "mtproto" and proxy.get("host") and proxy.get("secret"):
-        client_kwargs["connection"] = connection.ConnectionTcpMTProxyRandomizedIntermediate
-        client_kwargs["proxy"] = (proxy["host"], int(proxy.get("port", 443)), proxy["secret"])
-
-    with TelegramClient("channel_finder_session", api_id, api_hash, **client_kwargs) as client:
-        client.connect()
         if not client.is_user_authorized():
             client.send_code_request(phone)
             code = input("Введите код из Telegram: ")
@@ -216,22 +293,55 @@ def discover_channels_via_telegram(
                     engagement_rate=round(engagement_rate, 2),
                     last_post_date=last_post,
                 )
+    finally:
+        if client is not None:
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+        if created_loop:
+            loop.close()
 
-    if created_loop:
-        loop.close()
     return list(unique.values())
 
 
-def check_mtproto_proxy(host: str, port: int, secret: str, timeout: int = 8) -> tuple[bool, str]:
-    """Quick connectivity check for MTProto endpoint reachability."""
+def check_mtproto_proxy(
+    host: str,
+    port: int,
+    secret: str,
+    timeout: int = 8,
+    api_id: Optional[int] = None,
+    api_hash: Optional[str] = None,
+) -> tuple[bool, str]:
+    """Try TCP reachability and, if creds are provided, Telethon MTProto handshake."""
     try:
-        if not secret or len(secret) < 16:
+        normalized_secret = _normalize_secret(secret)
+        if not normalized_secret or len(normalized_secret) < 16:
             return False, "Слишком короткий secret MTProto."
 
         sock = socket.create_connection((host, int(port)), timeout=timeout)
         sock.close()
+
+        if api_id and api_hash:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                client = _telethon_client_for_mtproto(
+                    session_name="mtproto_check_session",
+                    api_id=api_id,
+                    api_hash=api_hash,
+                    host=host,
+                    port=int(port),
+                    secret=normalized_secret,
+                    loop=loop,
+                )
+                client.disconnect()
+            finally:
+                loop.close()
+            return True, "MTProto проверка успешна: TCP + Telethon handshake OK."
+
         return True, "MTProto endpoint отвечает (TCP доступ есть)."
     except socket.timeout:
         return False, "Таймаут при подключении к MTProto endpoint."
     except Exception as exc:
-        return False, f"MTProto endpoint недоступен: {exc}"
+        return False, f"MTProto недоступен/некорректен: {exc}"

@@ -65,11 +65,19 @@ def check_proxy():
     host = str(payload.get("mtproto_host", "")).strip()
     port = str(payload.get("mtproto_port", "443")).strip()
     secret = str(payload.get("mtproto_secret", "")).strip()
+    api_id = str(payload.get("api_id", "")).strip()
+    api_hash = str(payload.get("api_hash", "")).strip()
 
     if not host or not secret:
         return jsonify({"ok": False, "error": "Укажите MTProto host и secret."}), 400
 
-    ok, message = check_mtproto_proxy(host=host, port=int(port or "443"), secret=secret)
+    ok, message = check_mtproto_proxy(
+        host=host,
+        port=int(port or "443"),
+        secret=secret,
+        api_id=int(api_id) if api_id else None,
+        api_hash=api_hash or None,
+    )
     status = 200 if ok else 400
     return jsonify({"ok": ok, "message": message}), status
 

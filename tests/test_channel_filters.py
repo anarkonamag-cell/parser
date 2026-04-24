@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from telegram_channel_finder import ChannelInfo, filter_channels
+from telegram_channel_finder import ChannelInfo, detect_country, filter_channels
 
 
 def test_filter_channels_matches_required_rules():
@@ -48,3 +48,7 @@ def test_filter_channels_matches_required_rules():
 
     assert len(filtered) == 1
     assert filtered[0].username == "@a"
+
+
+def test_detect_country_germany():
+    assert detect_country("Berlin Germany news") == "germany"
