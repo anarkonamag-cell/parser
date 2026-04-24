@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import asyncio
+import socket
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, List, Optional
 
@@ -229,3 +230,28 @@ def discover_channels_via_telegram(
     if created_loop:
         loop.close()
     return list(unique.values())
+
+
+
+def check_socks5_proxy(proxy: dict, timeout: int = 8) -> tuple[bool, str]:
+    """Quick connectivity check to Telegram DC via SOCKS5 proxy."""
+    try:
+        import socks
+
+        sock = socks.socksocket()
+        sock.set_proxy(
+            socks.SOCKS5,
+            proxy.get("host"),
+            int(proxy.get("port", 1080)),
+            True,
+            proxy.get("username"),
+            proxy.get("password"),
+        )
+        sock.settimeout(timeout)
+        sock.connect(("149.154.167.51", 443))
+        sock.close()
+        return True, "Прокси доступен и соединение до Telegram DC успешно."
+    except socket.timeout:
+        return False, "Таймаут прокси при попытке подключения к Telegram."
+    except Exception as exc:
+        return False, f"Прокси недоступен: {exc}"

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request
 
-from telegram_channel_finder import discover_channels_via_telegram, filter_channels
+from telegram_channel_finder import check_socks5_proxy, discover_channels_via_telegram, filter_channels
 
 app = Flask(__name__)
 PARSE_LOCK = threading.Lock()
@@ -57,6 +57,31 @@ def set_settings():
     data = request.get_json(force=True, silent=True) or {}
     save_settings(data)
     return jsonify({"ok": True})
+
+
+
+
+@app.post("/api/check_proxy")
+def check_proxy():
+    payload = request.get_json(force=True, silent=True) or {}
+    host = str(payload.get("proxy_host", "")).strip()
+    port = str(payload.get("proxy_port", "1080")).strip()
+    username = str(payload.get("proxy_username", "")).strip()
+    password = str(payload.get("proxy_password", "")).strip()
+
+    if not host:
+        return jsonify({"ok": False, "error": "Укажите proxy host."}), 400
+
+    ok, message = check_socks5_proxy(
+        {
+            "host": host,
+            "port": int(port or "1080"),
+            "username": username or None,
+            "password": password or None,
+        }
+    )
+    status = 200 if ok else 400
+    return jsonify({"ok": ok, "message": message}), status
 
 
 @app.post("/api/parse")

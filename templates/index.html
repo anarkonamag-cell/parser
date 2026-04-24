@@ -116,6 +116,7 @@
 
         <div class="actions">
           <button type="button" id="save-settings-btn">Сохранить API/телефон</button>
+          <button type="button" id="check-proxy-btn">Проверить прокси</button>
           <button type="submit">Запустить парсинг</button>
           <button type="button" id="export-btn" disabled>Выгрузить CSV</button>
         </div>
@@ -135,6 +136,7 @@
       const resultsEl = document.getElementById('results');
       const exportBtn = document.getElementById('export-btn');
       const saveBtn = document.getElementById('save-settings-btn');
+      const checkProxyBtn = document.getElementById('check-proxy-btn');
       let lastItems = [];
 
       const setStatus = (text, ok = true) => {
@@ -173,6 +175,27 @@
         } else {
           setStatus('Не удалось сохранить настройки', false);
         }
+      });
+
+
+      checkProxyBtn.addEventListener('click', async () => {
+        const payload = {
+          proxy_host: form.elements.proxy_host.value,
+          proxy_port: form.elements.proxy_port.value,
+          proxy_username: form.elements.proxy_username.value,
+          proxy_password: form.elements.proxy_password.value,
+        };
+        const resp = await fetch('/api/check_proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          setStatus(data.error || data.message || 'Прокси не прошел проверку', false);
+          return;
+        }
+        setStatus(data.message || 'Прокси успешно проверен.');
       });
 
       form.addEventListener('submit', async (e) => {
