@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import csv
 import io
+import threading
 
 from flask import Flask, Response, jsonify, render_template, request
 
 from telegram_channel_finder import discover_channels_via_telegram, filter_channels
 
 app = Flask(__name__)
+PARSE_LOCK = threading.Lock()
 
 
 @app.get("/")
@@ -36,6 +38,9 @@ def parse_channel_list():
 
     search_queries = [q.strip() for q in queries_raw.split(",") if q.strip()]
 
+    if not PARSE_LOCK.acquire(blocking=False):
+        return jsonify({"ok": False, "error": "Парсинг уже выполняется. Дождитесь завершения текущего запуска и повторите."}), 409
+
     try:
         discovered = discover_channels_via_telegram(
             api_id=int(api_id_raw),
@@ -56,6 +61,8 @@ def parse_channel_list():
         )
     except Exception as exc:  # pragma: no cover
         return jsonify({"ok": False, "error": f"Ошибка парсинга: {exc}"}), 400
+    finally:
+        PARSE_LOCK.release()
 
     return jsonify(
         {
