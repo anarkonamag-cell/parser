@@ -9,120 +9,78 @@
   <body>
     <main class="container">
       <h1>Поиск Telegram-каналов по вашим условиям</h1>
-      <p class="hint">API и MTProto сохраняются в <code>tg_defaults.json</code>.</p>
+      <p class="hint">Режимы подключения: без прокси / MTProto / SOCKS5.</p>
 
       <form id="parser-form" class="panel">
         <div class="row">
-          <label>API ID
-            <input type="number" name="api_id" required />
-          </label>
-          <label>API HASH
-            <input type="text" name="api_hash" required />
-          </label>
+          <label>API ID <input type="number" name="api_id" required /></label>
+          <label>API HASH <input type="text" name="api_hash" required /></label>
         </div>
-
         <div class="row">
-          <label>Телефон Telegram
-            <input type="text" name="phone" placeholder="+79990000000" required />
-          </label>
-          <label>Поисковые запросы (через запятую)
-            <input type="text" name="queries" placeholder="новости, политика, спорт" required />
-          </label>
+          <label>Телефон Telegram <input type="text" name="phone" required /></label>
+          <label>Поисковые запросы <input type="text" name="queries" placeholder="новости, crypto" required /></label>
         </div>
 
-        <details open>
-          <summary>MTProto прокси</summary>
+        <label>Режим прокси
+          <select name="proxy_mode" id="proxy_mode">
+            <option value="none">Без прокси</option>
+            <option value="mtproto">MTProto</option>
+            <option value="socks5">SOCKS5</option>
+          </select>
+        </label>
+
+        <details id="mtproto-box">
+          <summary>MTProto настройки</summary>
           <div class="row">
-            <label>MTProto host
-              <input type="text" name="mtproto_host" placeholder="138.249.28.36" />
-            </label>
-            <label>MTProto port
-              <input type="number" name="mtproto_port" value="443" />
-            </label>
+            <label>MTProto host <input type="text" name="mtproto_host" /></label>
+            <label>MTProto port <input type="number" name="mtproto_port" value="443" /></label>
           </div>
           <div class="row">
-            <label>MTProto secret
-              <input type="text" name="mtproto_secret" />
-            </label>
-            <label>MTProto DC/ID (опционально)
-              <input type="text" name="mtproto_dc_id" placeholder="8049" />
-            </label>
+            <label>MTProto secret <input type="text" name="mtproto_secret" /></label>
+            <label>MTProto DC/ID <input type="text" name="mtproto_dc_id" /></label>
+          </div>
+        </details>
+
+        <details id="socks5-box">
+          <summary>SOCKS5 настройки</summary>
+          <div class="row">
+            <label>SOCKS5 host <input type="text" name="socks5_host" /></label>
+            <label>SOCKS5 port <input type="number" name="socks5_port" value="1080" /></label>
+          </div>
+          <div class="row">
+            <label>SOCKS5 username <input type="text" name="socks5_username" /></label>
+            <label>SOCKS5 password <input type="password" name="socks5_password" /></label>
           </div>
         </details>
 
         <div class="row">
           <label>Категория
-            <select name="category">
-              <option value="any">any</option>
-              <option value="news">news</option>
-              <option value="finance">finance</option>
-              <option value="tech">tech</option>
-              <option value="education">education</option>
-              <option value="entertainment">entertainment</option>
-            </select>
+            <select name="category"><option value="any">any</option><option value="news">news</option><option value="finance">finance</option><option value="tech">tech</option><option value="education">education</option><option value="entertainment">entertainment</option></select>
           </label>
-          <label>Минимум подписчиков
-            <input type="number" name="min_subscribers" value="500" min="0" />
-          </label>
+          <label>Минимум подписчиков <input type="number" name="min_subscribers" value="500" /></label>
         </div>
 
         <div class="row">
-          <label>Языки каналов (можно несколько)
-            <select name="languages" multiple size="4">
-              <option value="ru">ru</option>
-              <option value="en">en</option>
-              <option value="other">other</option>
-            </select>
+          <label>Языки
+            <select name="languages" multiple size="3"><option value="ru">ru</option><option value="en">en</option><option value="other">other</option></select>
           </label>
-          <label>Страны каналов (можно несколько)
+          <label>Страны
             <select name="countries" multiple size="14">
               <option value="germany">germany</option><option value="france">france</option><option value="italy">italy</option><option value="spain">spain</option><option value="portugal">portugal</option><option value="netherlands">netherlands</option><option value="belgium">belgium</option><option value="switzerland">switzerland</option><option value="austria">austria</option><option value="poland">poland</option><option value="czechia">czechia</option><option value="slovakia">slovakia</option><option value="hungary">hungary</option><option value="romania">romania</option><option value="bulgaria">bulgaria</option><option value="greece">greece</option><option value="croatia">croatia</option><option value="serbia">serbia</option><option value="slovenia">slovenia</option><option value="bosnia">bosnia</option><option value="montenegro">montenegro</option><option value="albania">albania</option><option value="north_macedonia">north_macedonia</option><option value="norway">norway</option><option value="sweden">sweden</option><option value="finland">finland</option><option value="denmark">denmark</option><option value="ireland">ireland</option><option value="iceland">iceland</option><option value="estonia">estonia</option><option value="latvia">latvia</option><option value="lithuania">lithuania</option><option value="luxembourg">luxembourg</option><option value="malta">malta</option><option value="cyprus">cyprus</option><option value="ukraine">ukraine</option><option value="belarus">belarus</option><option value="russia">russia</option><option value="kazakhstan">kazakhstan</option><option value="usa">usa</option><option value="unknown">unknown</option>
             </select>
           </label>
         </div>
 
-        <div class="row">
-          <label>Минимум ER (%)
-            <input type="number" name="min_engagement_rate" value="2" step="0.1" min="0" />
-          </label>
-          <label>Постов за период минимум
-            <input type="number" name="min_recent_posts" value="3" min="0" />
-          </label>
-        </div>
-
-        <div class="row">
-          <label>Активен за последние (дней)
-            <input type="number" name="active_within_days" value="14" min="1" />
-          </label>
-          <label>Глубина анализа (дней)
-            <input type="number" name="lookback_days" value="30" min="1" />
-          </label>
-        </div>
-
-        <div class="row">
-          <label>Лимит каналов
-            <input type="number" name="max_channels" value="100" min="1" max="500" />
-          </label>
-          <label class="checkbox-line">
-            <input type="checkbox" name="require_comments" checked />
-            Только каналы с открытыми комментариями
-          </label>
-        </div>
-
         <div class="actions">
           <button type="button" id="save-settings-btn">Сохранить настройки</button>
-          <button type="button" id="check-proxy-btn">Проверить MTProto</button>
+          <button type="button" id="check-proxy-btn">Проверить текущий режим</button>
           <button type="submit">Запустить парсинг</button>
           <button type="button" id="export-btn" disabled>Выгрузить CSV</button>
         </div>
       </form>
 
       <section id="status" class="status"></section>
-
-      <section class="panel">
-        <h2>Результаты</h2>
-        <div id="results"></div>
-      </section>
+      <section class="panel"><h2>Результаты</h2><div id="results"></div></section>
     </main>
 
     <script>
@@ -132,118 +90,55 @@
       const exportBtn = document.getElementById('export-btn');
       const saveBtn = document.getElementById('save-settings-btn');
       const checkProxyBtn = document.getElementById('check-proxy-btn');
+      const proxyModeEl = document.getElementById('proxy_mode');
+      const mtBox = document.getElementById('mtproto-box');
+      const socksBox = document.getElementById('socks5-box');
       let lastItems = [];
 
-      const setStatus = (text, ok = true) => {
-        statusEl.textContent = text;
-        statusEl.className = ok ? 'status ok' : 'status error';
+      const setStatus = (text, ok = true) => { statusEl.textContent = text; statusEl.className = ok ? 'status ok' : 'status error'; };
+      const refreshProxyBoxes = () => {
+        const mode = proxyModeEl.value;
+        mtBox.open = mode === 'mtproto';
+        socksBox.open = mode === 'socks5';
       };
+      proxyModeEl.addEventListener('change', refreshProxyBoxes);
 
       async function loadDefaults() {
-        const resp = await fetch('/api/settings');
-        const data = await resp.json();
-        if (!data.ok) return;
+        const resp = await fetch('/api/settings'); const data = await resp.json(); if (!data.ok) return;
         const s = data.settings || {};
-        for (const key of ['api_id', 'api_hash', 'phone', 'mtproto_host', 'mtproto_port', 'mtproto_secret', 'mtproto_dc_id']) {
-          if (form.elements[key]) form.elements[key].value = s[key] || '';
-        }
+        Object.keys(s).forEach((k) => { if (form.elements[k]) form.elements[k].value = s[k] || ''; });
+        refreshProxyBoxes();
       }
 
       saveBtn.addEventListener('click', async () => {
-        const payload = {
-          api_id: form.elements.api_id.value,
-          api_hash: form.elements.api_hash.value,
-          phone: form.elements.phone.value,
-          mtproto_host: form.elements.mtproto_host.value,
-          mtproto_port: form.elements.mtproto_port.value,
-          mtproto_secret: form.elements.mtproto_secret.value,
-          api_id: form.elements.api_id.value,
-          api_hash: form.elements.api_hash.value,
-          mtproto_dc_id: form.elements.mtproto_dc_id.value,
-        };
-        const resp = await fetch('/api/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+        const payload = Object.fromEntries(new FormData(form).entries());
+        const resp = await fetch('/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         const data = await resp.json();
-        if (resp.ok && data.ok) {
-          setStatus('Настройки сохранены.');
-        } else {
-          setStatus('Не удалось сохранить настройки', false);
-        }
+        setStatus(resp.ok && data.ok ? 'Настройки сохранены.' : 'Не удалось сохранить настройки', resp.ok && data.ok);
       });
 
       checkProxyBtn.addEventListener('click', async () => {
-        const payload = {
-          mtproto_host: form.elements.mtproto_host.value,
-          mtproto_port: form.elements.mtproto_port.value,
-          mtproto_secret: form.elements.mtproto_secret.value,
-          api_id: form.elements.api_id.value,
-          api_hash: form.elements.api_hash.value,
-        };
-        const resp = await fetch('/api/check_proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+        const payload = Object.fromEntries(new FormData(form).entries());
+        const resp = await fetch('/api/check_proxy', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         const data = await resp.json();
-        if (!resp.ok || !data.ok) {
-          setStatus(data.error || data.message || 'MTProto не прошел проверку', false);
-          return;
-        }
-        setStatus(data.message || 'MTProto endpoint доступен.');
+        setStatus((data.message || data.error || 'Ошибка проверки'), resp.ok && data.ok);
       });
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(form);
         setStatus('Идет парсинг...');
-
         const resp = await fetch('/api/parse', { method: 'POST', body: fd });
         const data = await resp.json();
-
-        if (!resp.ok || !data.ok) {
-          setStatus(data.error || 'Ошибка парсинга', false);
-          return;
-        }
-
-        lastItems = data.items || [];
-        exportBtn.disabled = lastItems.length === 0;
-        setStatus(`Готово. Найдено каналов: ${data.count}`);
-
-        if (!lastItems.length) {
-          resultsEl.innerHTML = '<p>Нет каналов по заданным фильтрам.</p>';
-          return;
-        }
-
-        resultsEl.innerHTML = lastItems
-          .map(
-            (item) => `
-            <article class="item">
-              <a href="https://t.me/${item.username.replace('@', '')}" target="_blank">${item.username}</a>
-              <div class="meta">${item.title} · подписчики: ${item.subscribers} · ER: ${item.engagement_rate}% · категория: ${item.category}</div>
-              <div class="meta">язык: ${item.language} · страна: ${item.country} · комментарии: ${item.comments_enabled ? 'открыты' : 'закрыты'}</div>
-            </article>`
-          )
-          .join('');
+        if (!resp.ok || !data.ok) return setStatus(data.error || 'Ошибка парсинга', false);
+        lastItems = data.items || []; exportBtn.disabled = !lastItems.length; setStatus(`Готово. Найдено каналов: ${data.count}`);
+        resultsEl.innerHTML = !lastItems.length ? '<p>Нет каналов по фильтрам.</p>' : lastItems.map((item) => `<article class="item"><a href="https://t.me/${item.username.replace('@','')}" target="_blank">${item.username}</a><div class="meta">${item.title} · ${item.country} · ${item.language} · ER ${item.engagement_rate}%</div></article>`).join('');
       });
 
       exportBtn.addEventListener('click', async () => {
         if (!lastItems.length) return;
-        const resp = await fetch('/api/export', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: lastItems }),
-        });
-
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'telegram_channels.csv';
-        a.click();
-        URL.revokeObjectURL(url);
+        const resp = await fetch('/api/export', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ items:lastItems }) });
+        const blob = await resp.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'telegram_channels.csv'; a.click(); URL.revokeObjectURL(url);
       });
 
       loadDefaults();

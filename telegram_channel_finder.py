@@ -43,15 +43,11 @@ def classify_category(text: str, category_rules: dict[str, list[str]]) -> str:
 
 def detect_language(text: str) -> str:
     text_l = text.lower()
-    ru_markers = [" и ", "что", "новости", "канал", "подпис"]
-    en_markers = [" the ", "news", "channel", "official", "daily"]
-
     cyr = sum(1 for ch in text_l if "а" <= ch <= "я" or ch == "ё")
     lat = sum(1 for ch in text_l if "a" <= ch <= "z")
-
-    if any(m in text_l for m in ru_markers) or cyr > lat * 0.8:
+    if cyr > lat * 0.8:
         return "ru"
-    if any(m in text_l for m in en_markers) or lat > cyr:
+    if lat > cyr:
         return "en"
     return "other"
 
@@ -184,6 +180,24 @@ def _telethon_client_for_mtproto(session_name: str, api_id: int, api_hash: str, 
     raise RuntimeError(f"MTProto connect failed: {last_exc}")
 
 
+def _telethon_client_for_socks5(session_name: str, api_id: int, api_hash: str, host: str, port: int, username, password, loop):
+    from telethon.sync import TelegramClient
+    import socks
+
+    client = TelegramClient(
+        session_name,
+        api_id,
+        api_hash,
+        loop=loop,
+        proxy=(socks.SOCKS5, host, port, True, username, password),
+        connection_retries=1,
+        request_retries=1,
+        timeout=20,
+    )
+    client.connect()
+    return client
+
+
 def discover_channels_via_telegram(
     api_id: int,
     api_hash: str,
@@ -219,7 +233,7 @@ def discover_channels_via_telegram(
 
     client = None
     try:
-        if proxy and proxy.get("mode") == "mtproto" and proxy.get("host") and proxy.get("secret"):
+        if proxy and proxy.get("mode") == "mtproto":
             client = _telethon_client_for_mtproto(
                 session_name="channel_finder_session",
                 api_id=api_id,
@@ -227,6 +241,17 @@ def discover_channels_via_telegram(
                 host=proxy["host"],
                 port=int(proxy.get("port", 443)),
                 secret=_normalize_secret(proxy["secret"]),
+                loop=loop,
+            )
+        elif proxy and proxy.get("mode") == "socks5":
+            client = _telethon_client_for_socks5(
+                session_name="channel_finder_session",
+                api_id=api_id,
+                api_hash=api_hash,
+                host=proxy["host"],
+                port=int(proxy.get("port", 1080)),
+                username=proxy.get("username"),
+                password=proxy.get("password"),
                 loop=loop,
             )
         else:
@@ -306,15 +331,7 @@ def discover_channels_via_telegram(
     return list(unique.values())
 
 
-def check_mtproto_proxy(
-    host: str,
-    port: int,
-    secret: str,
-    timeout: int = 8,
-    api_id: Optional[int] = None,
-    api_hash: Optional[str] = None,
-) -> tuple[bool, str]:
-    """Try TCP reachability and, if creds are provided, Telethon MTProto handshake."""
+def check_mtproto_proxy(host: str, port: int, secret: str, timeout: int = 8, api_id: Optional[int] = None, api_hash: Optional[str] = None) -> tuple[bool, str]:
     try:
         normalized_secret = _normalize_secret(secret)
         if not normalized_secret or len(normalized_secret) < 16:
@@ -342,7 +359,39 @@ def check_mtproto_proxy(
             return True, "MTProto проверка успешна: TCP + Telethon handshake OK."
 
         return True, "MTProto endpoint отвечает (TCP доступ есть)."
-    except socket.timeout:
-        return False, "Таймаут при подключении к MTProto endpoint."
     except Exception as exc:
         return False, f"MTProto недоступен/некорректен: {exc}"
+
+
+def check_socks5_proxy(host: str, port: int, username=None, password=None, timeout: int = 8, api_id: Optional[int] = None, api_hash: Optional[str] = None) -> tuple[bool, str]:
+    try:
+        import socks
+
+        sock = socks.socksocket()
+        sock.set_proxy(socks.SOCKS5, host, int(port), True, username, password)
+        sock.settimeout(timeout)
+        sock.connect(("149.154.167.51", 443))
+        sock.close()
+
+        if api_id and api_hash:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                client = _telethon_client_for_socks5(
+                    session_name="socks5_check_session",
+                    api_id=api_id,
+                    api_hash=api_hash,
+                    host=host,
+                    port=int(port),
+                    username=username,
+                    password=password,
+                    loop=loop,
+                )
+                client.disconnect()
+            finally:
+                loop.close()
+            return True, "SOCKS5 проверка успешна: TCP + Telethon handshake OK."
+
+        return True, "SOCKS5 endpoint отвечает (TCP доступ есть)."
+    except Exception as exc:
+        return False, f"SOCKS5 недоступен/некорректен: {exc}"

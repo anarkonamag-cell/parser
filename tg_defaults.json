@@ -2,8 +2,13 @@
   "api_id": "35779099",
   "api_hash": "4b4d4ecbe7623c805baf43ce6aef2448",
   "phone": "+79198037500",
+  "proxy_mode": "socks5",
   "mtproto_host": "138.249.28.36",
   "mtproto_port": "443",
   "mtproto_secret": "ee534540bab647a0ee1f9a9452d43a729a79612e7275",
-  "mtproto_dc_id": "8049"
+  "mtproto_dc_id": "8049",
+  "socks5_host": "142.252.244.216",
+  "socks5_port": "64193",
+  "socks5_username": "zSPsS7MF",
+  "socks5_password": "7uViUkKU"
 }
