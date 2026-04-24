@@ -148,7 +148,8 @@ def filter_channels(
 
 
 def _telethon_client_for_mtproto(session_name: str, api_id: int, api_hash: str, host: str, port: int, secret: str, loop):
-    from telethon import TelegramClient, connection
+    from telethon.sync import TelegramClient
+    from telethon import connection
 
     conn_candidates = [
         connection.ConnectionTcpMTProxyRandomizedIntermediate,
@@ -192,7 +193,7 @@ def discover_channels_via_telegram(
     lookback_days: int = 30,
     proxy: Optional[dict] = None,
 ) -> List[ChannelInfo]:
-    from telethon import TelegramClient
+    from telethon.sync import TelegramClient
     from telethon.errors import SessionPasswordNeededError
     from telethon.tl.functions.contacts import SearchRequest
     from telethon.tl.functions.channels import GetFullChannelRequest
