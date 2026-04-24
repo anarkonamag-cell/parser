@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Telegram Parser</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Парсер Telegram-каналов</h1>
+      <p class="hint">Работает с публичными каналами (например: @durov).</p>
+
+      <form id="parser-form" class="panel">
+        <label>Канал
+          <input type="text" name="channel" placeholder="@channel_name" required />
+        </label>
+
+        <div class="row">
+          <label>Ключевое слово
+            <input type="text" name="keyword" placeholder="например: ai" />
+          </label>
+          <label>Минимум просмотров
+            <input type="number" min="0" name="min_views" placeholder="1000" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>Дата от
+            <input type="datetime-local" name="date_from" />
+          </label>
+          <label>Дата до
+            <input type="datetime-local" name="date_to" />
+          </label>
+        </div>
+
+        <div class="actions">
+          <button type="button" id="check-btn">Проверить канал</button>
+          <button type="submit">Запустить парсинг</button>
+          <button type="button" id="export-btn" disabled>Выгрузить CSV</button>
+        </div>
+      </form>
+
+      <section id="status" class="status"></section>
+
+      <section class="panel">
+        <h2>Результаты</h2>
+        <div id="results"></div>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById('parser-form');
+      const statusEl = document.getElementById('status');
+      const resultsEl = document.getElementById('results');
+      const checkBtn = document.getElementById('check-btn');
+      const exportBtn = document.getElementById('export-btn');
+      let lastItems = [];
+
+      const setStatus = (text, ok = true) => {
+        statusEl.textContent = text;
+        statusEl.className = ok ? 'status ok' : 'status error';
+      };
+
+      checkBtn.addEventListener('click', async () => {
+        const fd = new FormData(form);
+        setStatus('Проверяем канал...');
+        const resp = await fetch('/api/check', { method: 'POST', body: fd });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          setStatus(data.error || 'Ошибка проверки', false);
+          return;
+        }
+        setStatus(`Канал доступен. Найдено постов: ${data.posts_found}. Последний пост: ${data.latest_post || 'нет данных'}`);
+      });
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        setStatus('Идет парсинг...');
+        const resp = await fetch('/api/parse', { method: 'POST', body: fd });
+        const data = await resp.json();
+
+        if (!resp.ok || !data.ok) {
+          setStatus(data.error || 'Ошибка парсинга', false);
+          return;
+        }
+
+        lastItems = data.items || [];
+        exportBtn.disabled = lastItems.length === 0;
+        setStatus(`Готово. Найдено записей: ${data.count}`);
+
+        if (!lastItems.length) {
+          resultsEl.innerHTML = '<p>Ничего не найдено по текущим фильтрам.</p>';
+          return;
+        }
+
+        resultsEl.innerHTML = lastItems
+          .slice(0, 100)
+          .map(
+            (item) => `
+            <article class="item">
+              <a href="${item.url}" target="_blank">${item.channel}/${item.message_id}</a>
+              <div class="meta">${item.date} · просмотры: ${item.views ?? 'н/д'}</div>
+              <p>${(item.text || '').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>
+            </article>`
+          )
+          .join('');
+      });
+
+      exportBtn.addEventListener('click', async () => {
+        if (!lastItems.length) return;
+        const resp = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: lastItems }),
+        });
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'telegram_posts.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    </script>
+  </body>
+</html>
