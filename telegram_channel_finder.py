@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, List, Optional
 
@@ -89,7 +90,15 @@ def discover_channels_via_telegram(
 
     unique: dict[str, ChannelInfo] = {}
 
-    with TelegramClient("channel_finder_session", api_id, api_hash) as client:
+    created_loop = False
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        created_loop = True
+
+    with TelegramClient("channel_finder_session", api_id, api_hash, loop=loop) as client:
         client.connect()
         if not client.is_user_authorized():
             client.send_code_request(phone)
@@ -149,4 +158,6 @@ def discover_channels_via_telegram(
                     last_post_date=last_post,
                 )
 
+    if created_loop:
+        loop.close()
     return list(unique.values())
