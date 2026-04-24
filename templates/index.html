@@ -3,39 +3,78 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Telegram Parser</title>
+    <title>Telegram Channel Finder</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
     <main class="container">
-      <h1>Парсер Telegram-каналов</h1>
-      <p class="hint">Работает с публичными каналами (например: @durov).</p>
+      <h1>Поиск Telegram-каналов по вашим условиям</h1>
+      <p class="hint">Источник: Telegram API (Telethon). Находит каналы и выгружает @username в CSV.</p>
 
       <form id="parser-form" class="panel">
-        <label>Канал
-          <input type="text" name="channel" placeholder="@channel_name" required />
-        </label>
-
         <div class="row">
-          <label>Ключевое слово
-            <input type="text" name="keyword" placeholder="например: ai" />
+          <label>API ID
+            <input type="number" name="api_id" required />
           </label>
-          <label>Минимум просмотров
-            <input type="number" min="0" name="min_views" placeholder="1000" />
+          <label>API HASH
+            <input type="text" name="api_hash" required />
           </label>
         </div>
 
         <div class="row">
-          <label>Дата от
-            <input type="datetime-local" name="date_from" />
+          <label>Телефон Telegram
+            <input type="text" name="phone" placeholder="+79990000000" required />
           </label>
-          <label>Дата до
-            <input type="datetime-local" name="date_to" />
+          <label>Поисковые запросы (через запятую)
+            <input type="text" name="queries" placeholder="новости крипто, ai, маркетинг" required />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>Категория
+            <select name="category">
+              <option value="any">any</option>
+              <option value="news">news</option>
+              <option value="finance">finance</option>
+              <option value="tech">tech</option>
+              <option value="education">education</option>
+              <option value="entertainment">entertainment</option>
+            </select>
+          </label>
+          <label>Минимум подписчиков
+            <input type="number" name="min_subscribers" value="500" min="0" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>Минимум ER (%)
+            <input type="number" name="min_engagement_rate" value="2" step="0.1" min="0" />
+          </label>
+          <label>Постов за период минимум
+            <input type="number" name="min_recent_posts" value="3" min="0" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>Активен за последние (дней)
+            <input type="number" name="active_within_days" value="14" min="1" />
+          </label>
+          <label>Глубина анализа (дней)
+            <input type="number" name="lookback_days" value="30" min="1" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>Лимит каналов
+            <input type="number" name="max_channels" value="100" min="1" max="500" />
+          </label>
+          <label class="checkbox-line">
+            <input type="checkbox" name="require_comments" checked />
+            Только каналы с открытыми комментариями
           </label>
         </div>
 
         <div class="actions">
-          <button type="button" id="check-btn">Проверить канал</button>
           <button type="submit">Запустить парсинг</button>
           <button type="button" id="export-btn" disabled>Выгрузить CSV</button>
         </div>
@@ -53,7 +92,6 @@
       const form = document.getElementById('parser-form');
       const statusEl = document.getElementById('status');
       const resultsEl = document.getElementById('results');
-      const checkBtn = document.getElementById('check-btn');
       const exportBtn = document.getElementById('export-btn');
       let lastItems = [];
 
@@ -62,22 +100,11 @@
         statusEl.className = ok ? 'status ok' : 'status error';
       };
 
-      checkBtn.addEventListener('click', async () => {
-        const fd = new FormData(form);
-        setStatus('Проверяем канал...');
-        const resp = await fetch('/api/check', { method: 'POST', body: fd });
-        const data = await resp.json();
-        if (!resp.ok || !data.ok) {
-          setStatus(data.error || 'Ошибка проверки', false);
-          return;
-        }
-        setStatus(`Канал доступен. Найдено постов: ${data.posts_found}. Последний пост: ${data.latest_post || 'нет данных'}`);
-      });
-
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(form);
-        setStatus('Идет парсинг...');
+        setStatus('Идет парсинг... При первом запуске код подтверждения нужно ввести в консоль приложения.');
+
         const resp = await fetch('/api/parse', { method: 'POST', body: fd });
         const data = await resp.json();
 
@@ -88,21 +115,20 @@
 
         lastItems = data.items || [];
         exportBtn.disabled = lastItems.length === 0;
-        setStatus(`Готово. Найдено записей: ${data.count}`);
+        setStatus(`Готово. Найдено каналов: ${data.count}`);
 
         if (!lastItems.length) {
-          resultsEl.innerHTML = '<p>Ничего не найдено по текущим фильтрам.</p>';
+          resultsEl.innerHTML = '<p>Нет каналов по заданным фильтрам.</p>';
           return;
         }
 
         resultsEl.innerHTML = lastItems
-          .slice(0, 100)
           .map(
             (item) => `
             <article class="item">
-              <a href="${item.url}" target="_blank">${item.channel}/${item.message_id}</a>
-              <div class="meta">${item.date} · просмотры: ${item.views ?? 'н/д'}</div>
-              <p>${(item.text || '').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>
+              <a href="https://t.me/${item.username.replace('@', '')}" target="_blank">${item.username}</a>
+              <div class="meta">${item.title} · подписчики: ${item.subscribers} · ER: ${item.engagement_rate}% · категория: ${item.category}</div>
+              <div class="meta">комментарии: ${item.comments_enabled ? 'открыты' : 'закрыты'} · постов за период: ${item.recent_posts} · средние просмотры: ${item.avg_views}</div>
             </article>`
           )
           .join('');
@@ -120,7 +146,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'telegram_posts.csv';
+        a.download = 'telegram_channels.csv';
         a.click();
         URL.revokeObjectURL(url);
       });

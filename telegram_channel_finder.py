@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Iterable, List, Optional
+
+
+@dataclass
+class ChannelInfo:
+    title: str
+    username: str
+    subscribers: int
+    comments_enabled: bool
+    category: str
+    recent_posts: int
+    avg_views: float
+    engagement_rate: float
+    last_post_date: Optional[datetime]
+
+
+def _normalize_username(username: str) -> str:
+    username = username.strip().replace("https://t.me/", "")
+    if username.startswith("@"):
+        username = username[1:]
+    return username.strip().lower()
+
+
+def classify_category(text: str, category_rules: dict[str, list[str]]) -> str:
+    text_l = text.lower()
+    for category, keywords in category_rules.items():
+        if any(k in text_l for k in keywords):
+            return category
+    return "other"
+
+
+def filter_channels(
+    channels: Iterable[ChannelInfo],
+    required_category: str = "any",
+    min_subscribers: int = 500,
+    require_comments_open: bool = True,
+    min_engagement_rate: float = 2.0,
+    min_recent_posts: int = 3,
+    active_within_days: int = 14,
+) -> List[ChannelInfo]:
+    now = datetime.now(timezone.utc)
+    result: List[ChannelInfo] = []
+
+    for ch in channels:
+        if ch.subscribers < min_subscribers:
+            continue
+        if require_comments_open and not ch.comments_enabled:
+            continue
+        if required_category != "any" and ch.category != required_category:
+            continue
+        if ch.engagement_rate < min_engagement_rate:
+            continue
+        if ch.recent_posts < min_recent_posts:
+            continue
+        if ch.last_post_date is None:
+            continue
+        if ch.last_post_date < now - timedelta(days=active_within_days):
+            continue
+        result.append(ch)
+
+    return sorted(result, key=lambda c: (c.engagement_rate, c.subscribers), reverse=True)
+
+
+def discover_channels_via_telegram(
+    api_id: int,
+    api_hash: str,
+    phone: str,
+    search_queries: list[str],
+    max_channels: int = 100,
+    lookback_days: int = 30,
+) -> List[ChannelInfo]:
+    from telethon import TelegramClient
+    from telethon.errors import SessionPasswordNeededError
+    from telethon.tl.functions.contacts import SearchRequest
+    from telethon.tl.functions.channels import GetFullChannelRequest
+    from telethon.tl.types import Channel
+
+    category_rules = {
+        "news": ["news", "новости", "срочно", "мир", "полит"],
+        "finance": ["финанс", "инвест", "crypto", "крипт", "бизнес", "рынок"],
+        "tech": ["tech", "тех", "it", "ai", "нейросет", "программ"],
+        "education": ["образ", "курс", "study", "learning", "универс"],
+        "entertainment": ["юмор", "mem", "кино", "music", "развлеч"],
+    }
+
+    unique: dict[str, ChannelInfo] = {}
+
+    with TelegramClient("channel_finder_session", api_id, api_hash) as client:
+        client.connect()
+        if not client.is_user_authorized():
+            client.send_code_request(phone)
+            code = input("Введите код из Telegram: ")
+            try:
+                client.sign_in(phone, code)
+            except SessionPasswordNeededError:
+                password = input("Введите пароль 2FA: ")
+                client.sign_in(password=password)
+
+        for query in search_queries:
+            if len(unique) >= max_channels:
+                break
+            res = client(SearchRequest(q=query, limit=min(100, max_channels)))
+            for chat in res.chats:
+                if len(unique) >= max_channels:
+                    break
+                if not isinstance(chat, Channel):
+                    continue
+                if not getattr(chat, "username", None):
+                    continue
+
+                uname = _normalize_username(chat.username)
+                if uname in unique:
+                    continue
+
+                full = client(GetFullChannelRequest(chat))
+                full_chat = full.full_chat
+                subscribers = int(getattr(full_chat, "participants_count", 0) or 0)
+                comments_enabled = bool(getattr(full_chat, "linked_chat_id", None))
+
+                messages = list(client.iter_messages(chat, limit=50))
+                recent_msgs = [m for m in messages if getattr(m, "date", None)]
+                if not recent_msgs:
+                    continue
+
+                last_post = max(m.date for m in recent_msgs if m.date)
+                cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+                active_msgs = [m for m in recent_msgs if m.date and m.date >= cutoff]
+                recent_posts = len(active_msgs)
+                views = [getattr(m, "views", 0) or 0 for m in active_msgs]
+                avg_views = float(sum(views) / len(views)) if views else 0.0
+                engagement_rate = (avg_views / subscribers * 100) if subscribers > 0 else 0.0
+
+                text_for_category = f"{chat.title or ''} {getattr(full_chat, 'about', '')}"
+                category = classify_category(text_for_category, category_rules)
+
+                unique[uname] = ChannelInfo(
+                    title=chat.title or uname,
+                    username=f"@{uname}",
+                    subscribers=subscribers,
+                    comments_enabled=comments_enabled,
+                    category=category,
+                    recent_posts=recent_posts,
+                    avg_views=round(avg_views, 2),
+                    engagement_rate=round(engagement_rate, 2),
+                    last_post_date=last_post,
+                )
+
+    return list(unique.values())
